@@ -1,6 +1,8 @@
+.idea
+.ipynb_checkpoints
 out/
 test/
 inputs/
 project_venv/
 dask-worker-space/
-.idea
+

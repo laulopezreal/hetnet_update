@@ -1,0 +1,5 @@
+# You can use pip to install everything required for most common uses of Dask (e.g. Dask Array, Dask DataFrame, etc.).
+# This installs both Dask and dependencies, like NumPy and pandas, that are necessary for different workloads. T
+# his is often the right choice for Dask users:
+  # Install everything
+dask[complete]

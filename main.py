@@ -144,12 +144,15 @@ if __name__ == '__main__':
             'provided_by': x['provided_by'],
         }
     # Restarting the Dask Client with a New configuration
+    ## define cluster params
     threads_per_worker = 2
+    n_workers = 2
+    memory_limit = '8 GB'
     logger.info(
         'Initiating Dask Client with the next parameters: {} workers, {} threads x worker:, memory_limit of {} as the next task is more exhaustive.'.format(
             n_workers, threads_per_worker, memory_limit))
-    client = initiate_dask_client(n_workers, threads_per_worker, memory_limit)
 
+    client = initiate_dask_client(n_workers, threads_per_worker, memory_limit)
     # Sanity check
     try:
         client.status == 'running'
@@ -158,24 +161,27 @@ if __name__ == '__main__':
     logger.info('Dask client status is {}. INFO: {}'.format(client.status, client))
     logger.info(
         'Call the GO API to obtain the updated list of Gene to Biological Process relations. Public available API at http://api.geneontology.org/api/')
-    # Some variables
+
+    # Set needed variables
     _start = 1
     _end = 3367291
     _batch = 1000
 
-    #  Calling the API in vatches
+    #  Calling the API in batches
     edge_list = []
     logger.info(
         'Only G-BP for human genes need to be considered. Filter results in batches and store the corres relationships')
-    for i in range(1, 3367291, 1000):
-        url = 'http://api.geneontology.org/api/association/to/GO%3A0008150?rows=1000&start={}&unselect_evidence=true&exclude_automatic_assertions=false&use_compact_associations=false'.format(
-            i)
+    for i in range(_start, 3367291, 1000):
+        url = 'http://api.geneontology.org/api/association/to/GO%3A0008150?rows=1000&start={}&' \
+              'unselect_evidence=true&exclude_automatic_assertions=false&use_compact_associations=false'.format(i)
         logger.debug('Batch of 1000 results n retrieved from the server {}'.format(i, url))
         get = db.read_text(url).map(json.loads).map(lambda x: x['associations']).flatten()
         match = get.map(maper).filter(lambda x: x['subject']['taxon']['id'] == 'NCBITaxon:9606')
-        edge_list.append(match.compute())
+        list = match.compute()
+        if len(list) !=0:
+            edge_list.extend(list)
         percentage = i / 3367291 * 100
-        logger.info('Records checked up to {}%'.format(percentage))
+        logger.info('Records checked up to {}%'.format(round(percentage, 3)))
 
     # Map the results to hetionet format
     logger.info('Mapping the results of the updated G-BP from GO API to HetioNet format.')

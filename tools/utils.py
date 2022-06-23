@@ -18,9 +18,8 @@ import dask.dataframe as dd
 from dask.distributed import Client
 
 
-
-
 # Define program functions
+
 def logger_outputs(_log_out_path, _run_date, _run_time):
     """
     Function to create the loggers and directories where the output logs will be stored.

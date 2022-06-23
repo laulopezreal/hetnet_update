@@ -1,8 +1,9 @@
 .idea
 .ipynb_checkpoints
+tools/.ipynb_checkpoints
 out/
 test/
 inputs/
 project_venv/
 dask-worker-space/
-
+__pycache__/

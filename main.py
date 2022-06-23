@@ -1,206 +1,42 @@
-#!/usr/bin/env python3
-
-# Import required libraries
-import os
-import sys
-import json
-import dask
-import warnings
-
-import logging
-# import requests
-import argparse
-from pprint import pprint
-
-import dask.bag as db
-import dask.dataframe as dd
-from dask.distributed import Client
-
-from datetime import datetime
+# Import custom utils library
+from tools.utils import *
 
 # Define program global Variables
 _current_wd = os.getcwd()
 _out_path = _current_wd + '/out'
 _log_out_path = _out_path + '/running_output'
 _program_output = _out_path + '/network_outputs'
+_download_output = _out_path + '/download_outputs'
 _jsonl_path = _program_output + '/jsonl'
 
 _run_date = datetime.now().strftime("%Y%m%d")
 _run_time = datetime.now().strftime("%H.%M")
 warnings.filterwarnings("ignore")
 
+# Program starts here #
 
-# Define program functions
-def logger_outputs():
-    """
-    Function to create the loggers and directories where the output logs will be stored.
-    :return: logger
-    """
-    # Create output dirs
-    path_exists = os.path.exists(_log_out_path + '/' + _run_date)
-    if path_exists == False:
-        os.makedirs(_log_out_path + '/' + _run_date, exist_ok=True)
-    out_name = 'helionet_run.{}.out'.format(_run_time)
-    err_name = 'helionet_run.{}.err'.format(_run_time)
-
-    # Create loggers
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    # create stream handler which logs INFO messages
-    console = logging.StreamHandler(stream=sys.stdout)
-    console.setLevel(logging.INFO)
-    # create file handler which logs INFO messages
-    oh = logging.FileHandler(_log_out_path + '/' + _run_date + '/' + out_name)
-    oh.setLevel(logging.DEBUG)
-    # create file handler which logs ERROR messages
-    eh = logging.FileHandler(_log_out_path + '/' + _run_date + '/' + err_name)
-    eh.setLevel(logging.ERROR)
-    # create formatter and add it to the handlers
-    formatter = logging.Formatter('%(asctime)s - %(module)s - %(levelname)s: %(message)s')
-    console.setFormatter(formatter)
-    eh.setFormatter(formatter)
-    oh.setFormatter(formatter)
-    # add the handlers to logger
-    logger.addHandler(eh)
-    logger.addHandler(oh)
-    logger.addHandler(console)
-    return logger, oh, eh
-
-
-def initiate_dask_client(n_workers, threads_per_worker, memory_limit):
-    """
-    Initiates the dask cluster with custom params
-    :param n_workers: number of workers to use.
-    :param threads_per_worker: number of threats per worker
-    :param memory_limit: maximum memory.
-    :return: client (Dask Client instance initiated)
-    """
-    client = Client(n_workers=n_workers, threads_per_worker=threads_per_worker, memory_limit=memory_limit)
-    return client
-
-
-def convert_jsonl_to_bags(count=False, print_example=False):
-    """
-    Take jsonl records and converts them into Dask bags for parsing.
-    :param count: Count number of records. Slows down performance. Default false.
-    :param print_example: Print an example of a Node and Edge record
-    :return: Node and Edge Dask bags.
-    """
-    N = db.read_text(_jsonl_path + '/*_nodes.jsonl').map(json.loads)
-    E = db.read_text(_jsonl_path + '/*_edges.jsonl').map(json.loads)
-    logger.info('Nodes and Edges bags created from {}.'.format(_jsonl_path))
-    if count:
-        logger.info('Number of records in Nodes: {}. Number of records in Edges: {}'.format(
-            N.count().compute(), E.count().compute()))
-    if print_example:
-        logger.info('Example of Node Record:')
-        print('-------')
-        pprint(N.take(1))
-        print('-------')
-        logger.info('Example of Edge Record:')
-        print('-------')
-        pprint(E.take(1))
-        print('-------')
-    return N, E
-
-
-def select_gene_BP_nodes(N, compute=False):
-    """
-    Select Gene and Biological Process Nodes from the Network
-    :param N: Node records (Dask Bag)
-    :param compute: If True computes the operation over the bag.Slows down performance. Default false.
-    :return:
-    """
-
-    # Function to select Gene and Biological Process nodes
-    def is_node_type(x):
-        return x['kind'] == 'Gene' or x['kind'] == 'Biological Process'
-
-    # Apply filter
-    selected_nodes = N.filter(lambda record: is_node_type(record))
-    if compute:
-        computed_selected_nodes = selected_nodes.compute()
-        return selected_nodes, computed_selected_nodes
-    else:
-        return selected_nodes
-
-
-def select_gene_BP_edges(E, compute=False):
-    """
-    Select Gene to Biological Process Edges from the Network
-    :param E: Edges records (Dask Bag).
-    :param compute: If True computes the operation over the bag.Slows down performance. Default false.
-    :return: selected_nodes: selected bag
-    """
-
-    # Function to select Gene to Biological Process relationships
-    def select_edges(x, y):
-        if x == 'Gene':
-            boolean = (y == 'Biological Process')
-        elif x == 'Biological Process':
-            boolean = (y == 'Gene')
-        else:
-            boolean = False
-        return (boolean)
-
-    # Apply filter
-    selected_edges = E.filter(lambda x: select_edges(x['source_id'][0], x['target_id'][0]))
-    if compute:
-        computed_selected_edges = selected_edges.compute()
-        return selected_edges, computed_selected_edges
-    else:
-        return selected_edges
-
-
-def convert_to_dd(selected_edges, print_head=False, save_jsonl=False, jsonl_path=_current_wd):
-    """
-    Create Dask DataFrame from the selected edges records
-    :param selected_edges:
-    :param print_head: print the first rows of the generated Dask DataFrame
-    :param save_json: save the Dask DataFrame as a jsonl file.
-    :param save_json: path where jsonl is produced. Default is working dir.
-    :return: df (Dask DataFrame)
-    """
-
-    # Function to flatten the data
-    def flatten_data(record):
-        return {
-            'source_type': record['source_id'][0],
-            'source_id': str(record['source_id'][1]),
-            'target_type': record['target_id'][0],
-            'target_id': record['target_id'][1],
-            'kind': record['kind'],
-            'direction': record['direction'],
-            'data': record['data']
-        }
-
-    # Create Dask DataFrame to store the selected GENE to BIOLOGICAL PROCESS edged into a json file
-    df = selected_edges.map(flatten_data).to_dataframe()
-    logger.info('Selected G-BP Edges Dask DataFrane successfully created.')
-    if print_head:
-        logger.info('Showing first rows of the DataFrame:\n----- G-BP Edges DataFrame')
-        print(df.describe())
-        print(df.head().iloc[:,0:4])
-    if save_jsonl:
-        df.to_json(jsonl_path, compression='gzip')
-    return df
-
-
-"""  
-Program starts here 
- """
 if __name__ == '__main__':
-    # 1) Extraction Pipeline
-
-    logger, oh, eh = logger_outputs()
+    """
+    1) G-BP Extraction Pipeline
+    """
+    logger, oh, eh = logger_outputs(_log_out_path, _run_date, _run_time)
     logger.info('Environment set, program starts running. Current working directory is {}'.format(_current_wd))
 
-    # HOW CAN I DOWNLOAD THE JSON? check later
+    # Download HetioNetJSON
+    download_url = 'https://github.com/hetio/hetionet/raw/master/hetnet/json/hetionet-v1.0.json.bz2'
+    logger.info('Start download hetionet compressed json from its origin URL: {} using HTTP'.format(download_url))
+    os.makedirs(_download_output, exist_ok=True)
+    response = requests.get(download_url, stream=True)
+    with open(_download_output + '/' + 'hetionet-v1.0.json.bz2', 'wb') as f:
+        for data in response:
+            f.write(data)
+    # Sanity check
+    while 'hetionet-v1.0.json.bz2' not in os.listdir(_download_output):
+        logger.info('Waiting for download to complete and streaming writing.')
 
-    # Read json file in streaming mode and convert it to jsonl
-    logging.info(
-        'Reading network nested json file and start conversion into new line delimited json (see https://jsonlines.org/).')
-    with open(_current_wd + '/test/data/hetionet-v1.0.json', 'rb') as f:
+    # Read json.bz2 file in streaming mode and convert it to jsonl
+    logger.info('DOWNLOAD COMPLETE: Read json.bz2 downloaded file in streaming mode and convert it to jsonl')
+    with bz2.open(_download_output + '/hetionet-v1.0.json.bz2', 'rb') as f:
         json_data = json.load(f)
         keys = [data for data in json_data]
         for key in keys:
@@ -212,6 +48,7 @@ if __name__ == '__main__':
                 to_write = json_data[key]
                 for element in to_write:
                     outfile.write(json.dumps(element) + "\n")
+
     # Sanity Check
     logger.info('Conversion complete. Performing sanity check before starting the Extraction Pipeline')
     try:
@@ -219,7 +56,6 @@ if __name__ == '__main__':
     except:
         raise BlockingIOError('Not all jsonl files needed for downstream Dask pipeline found. Path {} contains: {}. '
                               'Try to rerun the program'.format(_jsonl_path, os.listdir(_jsonl_path).join(',')))
-
     logger.info('All jsonl files needed for the downstream Dask pipeline have been generated at {}:{}.'.format(
         _jsonl_path, str(os.listdir(_jsonl_path))))
 
@@ -242,7 +78,7 @@ if __name__ == '__main__':
     logger.info('Dask client status is {}. INFO: {}'.format(client.status, client))
 
     # Convert jsonl files into a dask bag (ONLY NODE EDGES?, Remember there are other two)
-    N, E = convert_jsonl_to_bags(print_example=True)
+    N, E = convert_jsonl_to_bags(logger, _jsonl_path, print_example=True)
 
     # Number of Nodes of each type in the network
     logger.info('Computing the number of nodes of each type in the network')
@@ -273,7 +109,7 @@ if __name__ == '__main__':
         print(double[0][i], '------', list(n_selected_edges.keys()), '------', double[1][i])
     print('-----')
 
-    # Convert to df
+    # Convert to df and save the network as a jsonl compressed file
     logger.info('Converting the records of the extracted G-BP Edges into a Dask DataFrame '
                 'and save it as a jsonl output file.')
     if not os.path.exists(_program_output):
@@ -284,12 +120,111 @@ if __name__ == '__main__':
     output_absolute_path = _program_output + '/' + df_jsonl_name
 
     # execute the function
-    convert_to_dd(selected_edges, print_head=True, save_jsonl=True, jsonl_path=output_absolute_path)
+    hetionet_df = convert_to_dd(logger, selected_edges, print_head=True, save_jsonl=True,
+                                jsonl_path=output_absolute_path)
     # Sanity Check
     try:
         df_jsonl_name in os.listdir(_program_output)
     except:
-        FileNotFoundError('{} not found in {}. Something must have gone wrong during the export')
+        FileNotFoundError('{} not found in {}. Wrong wrong during the export')
     logger.info('Export of {} complete at {}!'.format(df_jsonl_name, _program_output))
+
+    # 2) Retrieve G-BP relations from http://api.geneontology.org/api
+    logger.info('Second Task: retrieve G-BP relationships from the Gene Ontology (GO) API: {}'.format(
+        '/http://api.geneontology.org/api'))
+
+
+    def maper(x):
+        return {
+            'type': x['type'],
+            'subject': x['subject'],
+            'object': x['object'],
+            'relation': x['relation'],
+            'evidence_types': x['evidence_types'],
+            'provided_by': x['provided_by'],
+        }
+
+
+    # Restarting the Dask Client with a New configuration
+    threads_per_worker = 2
+    logger.info(
+        'Initiating Dask Client with the next parameters: {} workers, {} threads x worker:, memory_limit of {} as the next task is more exhaustive.'.format(
+            n_workers, threads_per_worker, memory_limit))
+    client = initiate_dask_client(n_workers, threads_per_worker, memory_limit)
+
+    # Sanity check
+    try:
+        client.status == 'running'
+    except:
+        raise EnvironmentError('Dask client could not initiate.')
+    logger.info('Dask client status is {}. INFO: {}'.format(client.status, client))
+    logger.info(
+        'Call the GO API to obtain the updated list of Gene to Biological Process relations. Public available API at http://api.geneontology.org/api/')
+    # Some variables
+    _start = 1
+    _end = 3367291
+    _batch = 1000
+
+    #  Calling the API in vatches
+    edge_list = []
+    logger.info(
+        'Only G-BP for human genes need to be considered. Filter results in batches and store the corres relationships')
+    for i in range(1, 3367291, 1000):
+        url = 'http://api.geneontology.org/api/association/to/GO%3A0008150?rows=1000&start={}&unselect_evidence=true&exclude_automatic_assertions=false&use_compact_associations=false'.format(
+            i)
+        logger.info('Batch of {} results retrieved from the server {}'.format(i, url))
+        get = db.read_text(url).map(json.loads).map(lambda x: x['associations']).flatten()
+        match = get.map(maper).filter(lambda x: x['subject']['taxon']['id'] == 'NCBITaxon:9606')
+        edge_list.append(match.compute())
+        percentage = i / 3367291 * 100
+        logger.info('Records checked up to {}%'.format(percentage))
+
+    # Map the results to hetionet format
+    logger.info('Mapping the results of the updated G-BP from GO API to HetioNet format.')
+    GO_API_df_list = []
+    for record in edge_list:
+        data = {
+            "source_id": [
+                "Gene", record['source']['id']
+            ],
+            "target_id": [
+                "Biological Process", record['object']['id']
+            ],
+            "kind": "participates",
+            "direction": "both",
+            "data": {
+                "source": record['provided_by'],
+                "license": "CC BY 4.0",
+                "unbiased": "false"
+            }
+        }
+        GO_API_df_list.append(data)
+
+    # Convert to Pandas Data Frame
+    logger.info('Convert to a Pandas Data Frame')
+    GO_API_df = pd.DataFrame(GO_API_df_list)
+    print(GO_API_df.describe())
+    logger.info('Showing first rows of the DataFrame:\n----- G-BP Updated DataFrame')
+    print(GO_API_df.head().iloc[:, 0:4])
+    print('-----')
+
+    # Show first lines of the HetioNet Data Frame
+    logger.info('Showing first rows of the old HeloNet DataFrame:\n----- G-BP Old Hetionet DataFrame')
+    print(hetionet_df.head().iloc[:, 0:4])
+    print('-----')
+
+    # Convert to df and save the network as a jsonl compressed file
+    logger.info('Saving the records of the updated G-BP as a jsonl gzip compressed output file.')
+    os.makedirs(_program_output, exist_ok=True)
+    # define the absolute path
+    new_df_jsonl_name = 'UPDATED_G-BP_edges_formated_{}.jsonl.gzip'.format(_run_date)
+    output_absolute_path = _program_output + '/' + df_jsonl_name
+    GO_API_df.to_json(output_absolute_path, index=False, compression='gzip')
+
+    logger.info(
+        'DONE! New jsonl file {} with the updated relations ready at {}.'.format(new_df_jsonl_name, _program_output))
+
+    client.close()
+    # Close the handlers
     oh.close()
     eh.close()

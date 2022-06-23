@@ -38,7 +38,7 @@ def logger_outputs(_log_out_path, _run_date, _run_time):
     logger.setLevel(logging.DEBUG)
     # create stream handler which logs INFO messages
     console = logging.StreamHandler(stream=sys.stdout)
-    console.setLevel(logging.INFO)
+    console.setLevel(logging.DEBUG)
     # create file handler which logs INFO messages
     oh = logging.FileHandler(_log_out_path + '/' + _run_date + '/' + out_name)
     oh.setLevel(logging.DEBUG)

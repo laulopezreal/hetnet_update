@@ -130,10 +130,10 @@ if __name__ == '__main__':
     logger.info('Export of {} complete at {}!'.format(df_jsonl_name, _program_output))
 
     # 2) Retrieve G-BP relations from http://api.geneontology.org/api
-    logger.info('Second Task: retrieve G-BP relationships from the Gene Ontology (GO) API: {}'.format(
+    logger.info('START UPDATE RELATIONS STAGE: retrieve G-BP relationships from the Gene Ontology (GO) API: {}'.format(
         '/http://api.geneontology.org/api'))
 
-
+    # Define mapping function
     def maper(x):
         return {
             'type': x['type'],
@@ -143,8 +143,6 @@ if __name__ == '__main__':
             'evidence_types': x['evidence_types'],
             'provided_by': x['provided_by'],
         }
-
-
     # Restarting the Dask Client with a New configuration
     threads_per_worker = 2
     logger.info(
@@ -172,7 +170,7 @@ if __name__ == '__main__':
     for i in range(1, 3367291, 1000):
         url = 'http://api.geneontology.org/api/association/to/GO%3A0008150?rows=1000&start={}&unselect_evidence=true&exclude_automatic_assertions=false&use_compact_associations=false'.format(
             i)
-        logger.info('Batch of {} results retrieved from the server {}'.format(i, url))
+        logger.debug('Batch of 1000 results n retrieved from the server {}'.format(i, url))
         get = db.read_text(url).map(json.loads).map(lambda x: x['associations']).flatten()
         match = get.map(maper).filter(lambda x: x['subject']['taxon']['id'] == 'NCBITaxon:9606')
         edge_list.append(match.compute())

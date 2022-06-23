@@ -6,14 +6,6 @@ HetNets stands for Heterogeneous Networks, which are graphs with nodes and edges
 
 [Hetionet v1.0](https://github.com/hetio/hetionet) is a HetNet encoding biological, biomedical and pharmacology data sources.
 
-### Aim of the project
- We are interested in updating the published knowledge graph, [HetioNet](https://het.io)
-As the resource was established some time ago, some underlying resources might have been updated. 
-
-The project focus on isolate the Human Genes to GO Biological Process relations (gene G participates in process BP) within HetioNet.
-Then it uses the GO Rest API to (http://api.geneontology.org/api) to understand how these relations have changed to date and update the network.
-
-
 ## Environment setup
 
 ### env_setup.sh 
@@ -28,6 +20,19 @@ This is the other recommended way of setting up the environment.
 ```shell
 conda env create --name hetionet_project --file=environment.yml
 ```
+
+## Aim of the project
+ We are interested in updating the published knowledge graph, [HetioNet](https://het.io)
+As the resource was established some time ago, some underlying resources might have been updated. 
+
+The project focus on isolate the Human Genes to GO Biological Process relations (gene G participates in process BP) within HetioNet.
+Then it uses the GO Rest API to (http://api.geneontology.org/api) to understand how these relations have changed to date and update the network.
+
+To retrieve the original G-BP relations and the updated set from the GO API, please run:
+```shell
+python3 main.py
+```
+
 
 ## HetioNet_update Jupyter Notebook
 
@@ -48,6 +53,31 @@ Simply run this jupyter notebook in order to construct the knowledge graph form 
 This jupyter notebook produces a `json.gzip` file with all the G-BP relations.
 
 
+## Neo4j
+The script select_edges_neo4j.py implements a method to retrieve the set of G-BP relations and outputs a jsonl 
+file with all the relations from the original HelioNet network by reproducing the original edge datamodel (see below).
+
+```
+"edges": [
+  {
+    "source_id": [
+      "Gene",
+      2160
+    ],
+    "target_id": [
+      "Molecular Function",
+      "GO:0008201"
+    ],
+    "kind": "participates",
+    "direction": "both",
+    "data": {
+      "source": "NCBI gene2go",
+      "license": "CC BY 4.0",
+      "unbiased": false
+    }
+  }]
+
+```
 
 ----------
 **NOTE**: The program was run on a Linux OS, running the Unix open source distribution Ubuntu 20.04 LTS(64 bits); 

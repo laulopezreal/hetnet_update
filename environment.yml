@@ -84,3 +84,10 @@ dependencies:
   - zict=2.0.0=pyhd3eb1b0_0
   - zlib=1.2.12=h7f8727e_2
   - zstd=1.5.2=ha4553b6_0
+  - pip:
+    - interchange==2021.0.4
+    - monotonic==1.6
+    - neo4j==4.4.4
+    - pansi==2020.7.3
+    - py2neo==2021.2.3
+    - pygments==2.12.0

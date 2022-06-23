@@ -29,12 +29,6 @@ This is the other recommended way of setting up the environment.
 conda env create --name hetionet_project --file=environment.yml
 ```
 
-### Using pip
-To install the dependencies required using pip:
-```shell
-pip install -r requirements.txt
-```
-
 ## HetioNet_update Jupyter Notebook
 
 [HetioNet_update.ipnb](HetioNet_update.ipynb)  is jupyter notebook that implements the code to update the G-BP relations from the original HerioNet network.

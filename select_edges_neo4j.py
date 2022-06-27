@@ -21,7 +21,7 @@ graph = Graph('bolt://neo4j.het.io:7687')
 
 # Retrieve all the Gene to BP relations
 result = graph.run(
-    "MATCH (n:Gene), (bp:BiologicalProcess) MATCH p=(n)-[r:PARTICIPATES_GpBP]-(bp) RETURN n.identifier, bp.identifier, r"
+    "MATCH (n:Gene), (bp:BiologicalProcess) MATCH p=(n)-[r:PARTICIPATES_GpBP]-(bp) RETURN n.identifier, bp.identifier, r LIMIT 500"
 )
 
 # Format the data following HelioNEt edge data model

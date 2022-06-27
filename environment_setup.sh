@@ -7,7 +7,7 @@ conda activate hetionet_project
 
 ## You might want to delete the env after running the project
 ## Remove environment and its dependencies
-#conda remove --name envname --all
+conda remove --name envname --all
 #
 ## Other useful commands
 ## list all the conda environment available
